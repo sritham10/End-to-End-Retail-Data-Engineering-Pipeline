@@ -1,0 +1,50 @@
+{
+	"name": "df_silver_orders_transform",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ds_orders_csv",
+						"type": "DatasetReference"
+					},
+					"name": "OrdersSource"
+				}
+			],
+			"sinks": [],
+			"transformations": [
+				{
+					"name": "FilterNulls"
+				},
+				{
+					"name": "AddColumns"
+				},
+				{
+					"name": "AggregateOrders"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          order_id as string,",
+				"          customer_id as string,",
+				"          order_status as string,",
+				"          order_purchase_timestamp as string,",
+				"          order_approved_at as string,",
+				"          order_delivered_carrier_date as string,",
+				"          order_delivered_customer_date as string,",
+				"          order_estimated_delivery_date as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false) ~> OrdersSource",
+				"OrdersSource filter( !isNull(order_id) && !isNull(customer_id)) ~> FilterNulls",
+				"FilterNulls derive(order_year = year(toTimestamp(order_purchase_timestamp)),",
+				"          order_month = month(toTimestamp(order_purchase_timestamp)),",
+				"          fulfillment_days = toInteger(0)) ~> AddColumns",
+				"AddColumns aggregate(groupBy(customer_id,",
+				"          order_status)) ~> AggregateOrders"
+			]
+		}
+	}
+}
