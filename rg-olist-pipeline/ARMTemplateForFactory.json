@@ -1027,6 +1027,98 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/pl_gold_aggregations')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "gold_data_flow",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_gold_aggregations",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SilverOrdersSource": {},
+									"GoldSink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/df_gold_aggregations')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pl_silver_transformation')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "silver_data_flow",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "df_silver_orders_transform",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"OrdersSource": {},
+									"SilverSink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/df_silver_orders_transform')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ds_customers_csv')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -1457,7 +1549,24 @@
 					"firstRowAsHeader": true,
 					"quoteChar": "\""
 				},
-				"schema": []
+				"schema": [
+					{
+						"name": "customer_id",
+						"type": "String"
+					},
+					{
+						"name": "order_status",
+						"type": "String"
+					},
+					{
+						"name": "total_orders",
+						"type": "String"
+					},
+					{
+						"name": "avg_fulfillment",
+						"type": "String"
+					}
+				]
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/ls_adls_olist')]"
@@ -1479,6 +1588,65 @@
 				}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/df_gold_aggregations')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ds_silver_orders_output",
+								"type": "DatasetReference"
+							},
+							"name": "SilverOrdersSource"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ds_gold_revenue_output",
+								"type": "DatasetReference"
+							},
+							"name": "GoldSink"
+						}
+					],
+					"transformations": [
+						{
+							"name": "GoldAggregations"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          customer_id as string,",
+						"          order_status as string,",
+						"          total_orders as string,",
+						"          avg_fulfillment as string",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false) ~> SilverOrdersSource",
+						"SilverOrdersSource aggregate(groupBy(customer_id),",
+						"     total_orders = count(customer_id),",
+						"          total_revenue = sum(toDouble(avg_fulfillment))) ~> GoldAggregations",
+						"GoldAggregations sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     umask: 0022,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     partitionBy('hash', 1)) ~> GoldSink"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_silver_orders_output')]",
+				"[concat(variables('factoryId'), '/datasets/ds_gold_revenue_output')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/df_silver_orders_transform')]",
@@ -1530,7 +1698,7 @@
 						"     allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     ignoreNoFilesFound: false) ~> OrdersSource",
-						"OrdersSource filter( !isNull(order_id) && !isNull(customer_id)) ~> FilterNulls",
+						"OrdersSource filter(!isNull(order_id) && !isNull(customer_id)) ~> FilterNulls",
 						"FilterNulls derive(order_year = year(toTimestamp(order_purchase_timestamp)),",
 						"          order_month = month(toTimestamp(order_purchase_timestamp)),",
 						"          fulfillment_days = toInteger(0)) ~> AddColumns",
@@ -1540,6 +1708,12 @@
 						"          avg_fulfillment = avg(fulfillment_days)) ~> AggregateOrders",
 						"AggregateOrders sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
+						"     input(",
+						"          customer_id as string,",
+						"          order_status as string,",
+						"          total_orders as string,",
+						"          avg_fulfillment as string",
+						"     ),",
 						"     partitionFileNames:['orders_silver.csv'],",
 						"     truncate: true,",
 						"     umask: 0022,",
@@ -1554,52 +1728,6 @@
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/ds_orders_csv')]",
 				"[concat(variables('factoryId'), '/datasets/ds_silver_orders_output')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/pl_silver_transformation')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "silver_data_flow",
-						"type": "ExecuteDataFlow",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataflow": {
-								"referenceName": "df_silver_orders_transform",
-								"type": "DataFlowReference",
-								"parameters": {},
-								"datasetParameters": {
-									"OrdersSource": {},
-									"SilverSink": {}
-								}
-							},
-							"staging": {},
-							"compute": {
-								"coreCount": 8,
-								"computeType": "General"
-							},
-							"traceLevel": "Fine"
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/dataflows/df_silver_orders_transform')]"
 			]
 		}
 	]
