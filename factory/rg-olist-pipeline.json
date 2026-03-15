@@ -1,0 +1,9 @@
+{
+	"name": "rg-olist-pipeline",
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "bafa1bf6-b587-448a-a7f0-6bef69b1dca0",
+		"tenantId": "e0793d39-0939-496d-b129-198edd916feb"
+	}
+}
