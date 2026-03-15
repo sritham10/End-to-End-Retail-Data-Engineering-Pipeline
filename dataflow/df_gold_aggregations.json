@@ -1,0 +1,53 @@
+{
+	"name": "df_gold_aggregations",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ds_silver_orders_output",
+						"type": "DatasetReference"
+					},
+					"name": "SilverOrdersSource"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_gold_revenue_output",
+						"type": "DatasetReference"
+					},
+					"name": "GoldSink"
+				}
+			],
+			"transformations": [
+				{
+					"name": "GoldAggregations"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          customer_id as string,",
+				"          order_status as string,",
+				"          total_orders as string,",
+				"          avg_fulfillment as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false) ~> SilverOrdersSource",
+				"SilverOrdersSource aggregate(groupBy(customer_id),",
+				"     total_orders = count(customer_id),",
+				"          total_revenue = sum(toDouble(avg_fulfillment))) ~> GoldAggregations",
+				"GoldAggregations sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> GoldSink"
+			]
+		}
+	}
+}
