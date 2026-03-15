@@ -12,7 +12,15 @@
 					"name": "OrdersSource"
 				}
 			],
-			"sinks": [],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_silver_orders_output",
+						"type": "DatasetReference"
+					},
+					"name": "SilverSink"
+				}
+			],
 			"transformations": [
 				{
 					"name": "FilterNulls"
@@ -43,7 +51,18 @@
 				"          order_month = month(toTimestamp(order_purchase_timestamp)),",
 				"          fulfillment_days = toInteger(0)) ~> AddColumns",
 				"AddColumns aggregate(groupBy(customer_id,",
-				"          order_status)) ~> AggregateOrders"
+				"          order_status),",
+				"     total_orders = count(order_id),",
+				"          avg_fulfillment = avg(fulfillment_days)) ~> AggregateOrders",
+				"AggregateOrders sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     partitionFileNames:['orders_silver.csv'],",
+				"     truncate: true,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> SilverSink"
 			]
 		}
 	}
